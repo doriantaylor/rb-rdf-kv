@@ -7,7 +7,7 @@ Gem::Specification.new do |spec|
   spec.authors       = ['Dorian Taylor']
   spec.email         = ['code@doriantaylor.com']
   spec.license       = 'Apache-2.0'
-  spec.homepage      = 'htps://github.com/doriantaylor/rb-rdf-kv'
+  spec.homepage      = 'https://github.com/doriantaylor/rb-rdf-kv'
   spec.summary       = 'Ruby implementation of the RDF-KV protocol'
   spec.description   = <<-DESC
 This module implements https://doriantaylor.com/rdf-kv, taking
