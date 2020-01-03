@@ -1,36 +1,43 @@
-# RDF::KV
+# RDF::KV — Turn Key-Value Pairs into an RDF::Changeset
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/rdf/kv`. To experiment with that code, run `bin/console` for an interactive prompt.
+This module is an implementation of the
+[RDF-KV](https://doriantaylor.com/rdf-kv) protocol. This protocol
+defines a method for embedding instructions for constructing a
+[changeset](https://rubydoc.info/gems/rdf/RDF/Changeset) from ordinary
+key-value pairs.
 
-TODO: Delete this and the text above, and describe your gem
+```ruby
+# initialize the processor
+kv = RDF::KV.new subject: my_url, graph: graph_url
+
+# use it to generate a changeset, e.g. from web form POST data
+cs = kv.process rack.POST
+
+# now apply it to your RDF::Repository
+cs.apply repo
+```
+
+## Documentation
+
+API documentation, for what it's worth at the moment, can be found [in
+the usual place](https://rubydoc.info/github/doriantaylor/rb-rdf-kv/master).
 
 ## Installation
 
-Add this line to your application's Gemfile:
-
-```ruby
-gem 'rdf-kv'
-```
-
-And then execute:
-
-    $ bundle install
-
-Or install it yourself as:
+You know how to do this:
 
     $ gem install rdf-kv
 
-## Usage
-
-TODO: Write usage instructions here
-
-## Development
-
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
-
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+Or, [download it off rubygems.org](https://rubygems.org/gems/rdf-kv).
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/rdf-kv.
+Bug reports and pull requests are welcome at
+[the GitHub repository](https://github.com/doriantaylor/rb-rdf-kv).
 
+## Copyright & License
+
+©2019 [Dorian Taylor](https://doriantaylor.com/)
+
+This software is provided under
+the [Apache License, 2.0](https://www.apache.org/licenses/LICENSE-2.0).
