@@ -25,7 +25,7 @@ class RDF::KV
   DESIGNATOR   = "(?:[:_']|@#{RFC5646}|\\^#{TERM})".freeze
   DECLARATION  = "^\\s*\\$\\s+(#{NCNAME})(?:\\s+(\\$))?\s*$".freeze
   MACRO        = "(?:\\$\\{(#{NCNAME})\\}|\\$(#{NCNAME}))".freeze
-  NOT_MACRO    = "(?:(?!\\$#{NCNAME}|\\$\\{(#{NCNAME})\\}).)*".freeze
+  NOT_MACRO    = "(?:(?!\\$#{NCNAME}|\\$\\{#{NCNAME}\\}).)*".freeze
   MACROS       = "(#{NOT_MACRO})(?:#{MACRO})?(#{NOT_MACRO})".freeze
   PARTIAL_STMT = "^\\s*(?:(#{MODIFIER})\\s+)?" \
     "(?:(#{TERM})(?:\\s+(#{TERM}))?(?:\\s+(#{DESIGNATOR}))?|" \
@@ -39,18 +39,22 @@ class RDF::KV
 
   # these should be instance_exec'd
   SPECIALS = {
-    SUBJECT: -> val { @subject = val[-1] unless val.empty? },
-    GRAPH:   -> val { @graph = val[-1] unless val.empty? },
+    SUBJECT: -> val {
+      @subject = resolve_term val[-1] unless val.empty? },
+    GRAPH:   -> val {
+      @graph = resolve_term val[-1] unless val.empty? },
     PREFIX:  -> val {
-      val.each do |v|
-        m = /^\s*(#{NCNAME}):\s+(.*)$/o.match(v) or next
+      val.each do |v, _|
+        next unless m = /^\s*(#{NCNAME}):\s+(.*)$/o.match(v)
         prefix, uri = m.captures
         @namespaces[prefix.to_sym] = RDF::Vocabulary.new uri
       end
     },
   }
 
-  # not sure why this has this structure
+  # macros are initially represented as a pair: the macro value and a
+  # flag denoting whether or not the macro itself contains macros and to
+  # try to dereference it.
   GENERATED = {
     NEW_UUID:     [[-> { UUIDTools::UUID.random_create.to_s   }, false]],
     NEW_UUID_URN: [[-> { UUIDTools::UUID.random_create.to_uri }, false]],
@@ -68,11 +72,14 @@ class RDF::KV
 
   def deref_content strings, macros
     strings = [strings] unless strings.is_a? Array
-    # bail out
-    return strings unless strings.any? { |s| /\$#{MACRO}/o.match s }
+    # bail out early if there is nothing to do
+    return strings unless strings.any? { |s| /#{MACRO}/o.match s }
     out = []
-
     strings.each do |s|
+      # sometimes these are arrays of arrays
+      #s = s.first if s.is_a? Array
+
+      # chunks are parallel output; each element is a value
       chunks = []
       s.scan(/\G#{MACROS}/o) do |m|
         pre   = m.first
@@ -81,6 +88,8 @@ class RDF::KV
 
         # skip if there was no macro
         unless macro
+          # nothing to do
+          next if pre + post == ""
           chunks = chunks.empty? ? [pre, post] : chunks.map do |x|
             "#{x}#{pre}#{post}"
           end
@@ -94,17 +103,16 @@ class RDF::KV
                 '%s%s%s' % [pre, m.respond_to?(:call) ? m.call : m, post]
               end
             else
+              # this is a noop
               ["#{pre}$#{macro}#{post}"]
             end
 
-        #initialize chunks
+        # initialize chunks
         if chunks.empty?
           chunks = x
           next
-        end
-
-        # replace chunks with the product of itself and x
-        unless x.empty?
+        elsif !x.empty?
+          # replace chunks with the product of itself and x
           y = []
           chunks.each { |c| x.each { |d| y << "#{c}#{d}" } }
           chunks = y
@@ -119,20 +127,23 @@ class RDF::KV
 
   def massage_macros macros
     seen = {}
-    done = {}
-    pending = macros.filter { |k, _| GENERATED.key? k }
-    queue   = pending.keys.slice 0..0
+    done = GENERATED.transform_values { |v| v.map { |w| w.first } }
+    pending = macros.reject { |k, _| GENERATED.key? k }
+    queue   = pending.keys.slice 0..0 # take a zero-or-one-element slice
 
     until queue.empty?
       k = queue.shift
       seen[k] = true
 
       vals = macros[k]
+
+      # done and pending macros within the macros
       dm = {}
       pm = {}
 
       vals.each do |pair|
         val, deref = pair
+
         next unless deref
 
         if deref.is_a? Array
@@ -148,12 +159,14 @@ class RDF::KV
 
             m[x] = true
 
-            done[m] ? dm[m] : pm[m]
+            done[m] ? dm[m] = true : pm[m] = true
           end
+          # push the deref
           pair[1] = m.empty? ? false : m.keys.sort
         end
       end
 
+      # macro values have pending matches
       if !pm.empty?
         q = []
         pm.keys.each do |m|
@@ -163,13 +176,19 @@ class RDF::KV
 
         queue = q + [k] + queue
         next
-      elsif !dm.empty?
-        done[k] = deref_content vals, done
-      else
-        done[k] = [vals.map(&:first)]
       end
 
+      unless dm.empty?
+        done[k] = deref_content vals, done
+      else
+        done[k] = vals.map(&:first)
+      end
+
+      # remember to remove this guy or we'll loop forever
       pending.delete k
+
+      # replenish the queue with another pending object
+      queue << pending.keys.first if queue.empty? and !pending.keys.empty?
     end
 
     done
@@ -211,6 +230,10 @@ class RDF::KV
       raise 'datatype must be an RDF::Resource' unless
         langdt.is_a? RDF::Resource
       term = RDF::Literal(token, datatype: langdt)
+    elsif hint == ?'
+      term = RDF::Literal(token)
+    else
+      raise ArgumentError, "Unrecognized hint (#{hint})"
     end
 
     # call the callback if we have one
@@ -272,11 +295,12 @@ class RDF::KV
 
     data.each do |k, *v|
       # step 0: get the values to a homogeneous list
+      k = k.to_s
       v = v.flatten.map(&:to_s)
       # step 1: pull out all the macro declarations
       if (m = /#{DECLARATION}/o.match k)
         name  = m[1].to_sym
-        sigil = m[2] && !m[2].empty?
+        sigil = !!(m[2] && !m[2].empty?)
         # skip over generated macros
         next if GENERATED.key? name
         # step 1.0.1: create [content, deref flag] pairs
@@ -299,9 +323,9 @@ class RDF::KV
     # step 3: apply special control macros (which modify self)
     begin
       SPECIALS.each do |k, macro|
-        instance_exec macros[k], macro if macros[k]
+        instance_exec macros[k], &macro if macros[k]
       end
-    rescue e
+    rescue Exception => e
       # again this should be nicer
       raise e
     end
@@ -318,15 +342,13 @@ class RDF::KV
       k.each do |template|
         tokens = GRAMMAR.match(template) or next
         tokens = tokens.captures
-        warn tokens.inspect
+
         raise 'INTERNAL ERROR: Regexp captures do not match template' unless
           tokens.length == MAP.length
 
         # i had something much cleverer here but of course it didn't DWIW
         contents = {}
-        MAP.each_index do |i|
-          contents[MAP[i]] ||= tokens[i]
-        end
+        MAP.each_index { |i| contents[MAP[i]] ||= tokens[i] }
         contents.compact!
 
         contents[:modifier] = (contents[:modifier] || '').chars.map do |c|
@@ -357,8 +379,9 @@ class RDF::KV
           # literals make no sense on reverse statements
           # (XXX this is a candidate for diagnostics)
           next unless [?_, ?:].include? contents[:designator].first
-          p = coerce_term contents[:term1]
-          o = coerce_term(contents[:term2]) || subject
+          # these terms have already been resolved/coerced
+          p = contents[:term1]
+          o = contents[:term2] || subject
         else
           s, p = (contents[:term2] ? contents.values_at(:term1, :term2) :
                   [subject, contents[:term1]]).map { |t| resolve_term t }

@@ -31,8 +31,14 @@ RDF::Changeset.
 
   spec.required_ruby_version = Gem::Requirement.new('>= 2.3.0')
   # dev/test dependencies
-  spec.add_development_dependency 'bundler', '~> 2'
+  spec.add_development_dependency 'bundler',   '~> 2'
+  spec.add_development_dependency 'rdf-vocab', '~> 3.1'
 
   # stuff we use
-  spec.add_runtime_dependency 'rdf', '>= 3.0.12'
+  spec.add_runtime_dependency 'rdf',       '>= 3.1.1' # include my changes
+  spec.add_runtime_dependency 'uuidtools', '~> 2'
+
+  # stuff i wrote
+  spec.add_runtime_dependency 'uuid-ncname', '>= 0.2.5'
+
 end

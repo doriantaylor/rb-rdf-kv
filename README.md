@@ -17,7 +17,11 @@ cs = kv.process rack.POST
 cs.apply repo
 ```
 
-## Documentation
+## Protocol Documentation
+
+See [the very tentative spec](https://doriantaylor.com/rdf-kv).
+
+## API Documentation
 
 API documentation, for what it's worth at the moment, can be found [in
 the usual place](https://rubydoc.info/github/doriantaylor/rb-rdf-kv/master).
