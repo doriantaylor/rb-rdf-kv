@@ -35,7 +35,7 @@ class RDF::KV
 
   GRAMMAR = /#{PARTIAL_STMT}/o
   MAP     = %i[modifier term1 term2 designator term1 designator graph
-             term1 term2 designator graph deref]
+             term1 term2 designator graph deref].freeze
 
   # these should be instance_exec'd
   SPECIALS = {
@@ -47,10 +47,10 @@ class RDF::KV
       val.each do |v, _|
         next unless m = /^\s*(#{NCNAME}):\s+(.*)$/o.match(v)
         prefix, uri = m.captures
-        @namespaces[prefix.to_sym] = RDF::Vocabulary.new uri
+        @prefixes[prefix.to_sym] = RDF::Vocabulary.new uri
       end
     },
-  }
+  }.freeze
 
   # macros are initially represented as a pair: the macro value and a
   # flag denoting whether or not the macro itself contains macros and to
@@ -60,7 +60,7 @@ class RDF::KV
     NEW_UUID_URN: [[-> { UUIDTools::UUID.random_create.to_uri }, false]],
     NEW_BNODE:    [[-> { "_:#{UUID::NCName.to_ncname_64(
           UUIDTools::UUID.random_create.to_s, version: 1) }" }, false]],
-  }
+  }.freeze
 
   # just the classics
   DEFAULT_NS = {
@@ -70,15 +70,14 @@ class RDF::KV
     xsd:  RDF::XSD,
   }.freeze
 
+  # Given a (massaged) set of macros, dereference the given array of
+  # strings and return it.
   def deref_content strings, macros
     strings = [strings] unless strings.is_a? Array
     # bail out early if there is nothing to do
     return strings unless strings.any? { |s| /#{MACRO}/o.match s }
     out = []
     strings.each do |s|
-      # sometimes these are arrays of arrays
-      #s = s.first if s.is_a? Array
-
       # chunks are parallel output; each element is a value
       chunks = []
       s.scan(/\G#{MACROS}/o) do |m|
@@ -125,6 +124,10 @@ class RDF::KV
     out
   end
 
+  # Given the structure of macro declarations, dereference any
+  # recursively-defined macros, and return a new structure with a key
+  # and array of _values_, rather than an array of `[value, deref]`
+  # pairs.
   def massage_macros macros
     seen = {}
     done = GENERATED.transform_values { |v| v.map { |w| w.first } }
@@ -147,9 +150,7 @@ class RDF::KV
         next unless deref
 
         if deref.is_a? Array
-          deref.each do |m|
-            done[m] ? dm[m] = true : pm[m] = true
-          end
+          deref.each { |m| done[m] ? dm[m] = true : pm[m] = true }
         else
           m = {}
           val.scan(/#{MACRO}/o).compact.each do |x|
@@ -161,7 +162,8 @@ class RDF::KV
 
             done[m] ? dm[m] = true : pm[m] = true
           end
-          # push the deref
+
+          # replace the deref flag with the elements to deref with
           pair[1] = m.empty? ? false : m.keys.sort
         end
       end
@@ -174,6 +176,7 @@ class RDF::KV
           q << m
         end
 
+        # put the current key back on the queue but put the dependencies first
         queue = q + [k] + queue
         next
       end
@@ -205,7 +208,7 @@ class RDF::KV
     # ugh now we gotta do urls
     if m = /^(#{NCNAME}):(\S*)$/o.match(term)
       prefix, slug = m.captures
-      if !slug.start_with?(?/) and vocab = namespaces[prefix.to_sym]
+      if !slug.start_with?(?/) and vocab = prefixes[prefix.to_sym]
         return vocab[slug]
       end
     end
@@ -238,37 +241,39 @@ class RDF::KV
 
     # call the callback if we have one
     term = callback.call term if callback
-      
+
     term
   end
 
   public
 
-  attr_reader :subject, :graph, :namespaces, :callback
+  attr_reader :subject, :graph, :prefixes, :callback
+  # why is this :target, :source
+  alias_method :namespaces, :prefixes
 
   # Initialize the processor.
   #
-  # @param subject    [RDF::URI] The default subject. Required.
-  # @param graph      [RDF::URI] The default context. Optional.
-  # @param namespaces [Hash]     Namespace/prefix mappings. Optional.
-  # @param callback   [#call]    A callback that expects and returns a term.
+  # @param subject  [RDF::URI] The default subject. Required.
+  # @param graph    [RDF::URI] The default context. Optional.
+  # @param prefixes [Hash]     Namespace/prefix mappings. Optional.
+  # @param callback [#call]    A callback that expects and returns a term.
   #  Optional.
   #
-  def initialize subject: nil, graph: nil, namespaces: {}, callback: nil
+  def initialize subject: nil, graph: nil, prefixes: {}, callback: nil
     # look at all of our pretty assertions
     raise ArgumentError, 'subject must be an RDF::Resource' unless
       subject.is_a? RDF::Resource
     raise ArgumentError, 'graph must be an RDF::Resource' unless
       graph.nil? or graph.is_a? RDF::Resource
-    raise ArgumentError, 'namespaces must be hashable' unless
-      namespaces.respond_to? :to_h
+    raise ArgumentError, 'prefixes must be hashable' unless
+      prefixes.respond_to? :to_h
     rase ArgumentError, 'callback must be callable' unless
       callback.nil? or callback.respond_to? :call
 
-    @subject    = subject
-    @graph      = graph
-    @callback   = callback
-    @namespaces = DEFAULT_NS.merge(namespaces.to_h.map do |k, v|
+    @subject  = subject
+    @graph    = graph
+    @callback = callback
+    @prefixes = DEFAULT_NS.merge(prefixes.to_h.map do |k, v|
       k = k.to_s.to_sym    unless k.is_a? Symbol
       # coerce to uri
       v = RDF::URI(v.to_s) unless v.is_a? RDF::Resource
@@ -327,7 +332,7 @@ class RDF::KV
       end
     rescue Exception => e
       # again this should be nicer
-      raise e
+      raise Error.new e
     end
 
     # this will be our output
@@ -418,4 +423,6 @@ class RDF::KV
 
     patch
   end
+
+  class Error < RuntimeError; end
 end

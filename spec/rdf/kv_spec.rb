@@ -20,7 +20,7 @@ RSpec.describe RDF::KV do
 
     it 'should add simple statements to the insert side' do
       this = described_class.new subject: suri,
-        namespaces: { xhv: RDF::Vocab::XHV }
+        prefixes: { xhv: RDF::Vocab::XHV }
 
       patch = this.process({
         'xhv:index :' => '/',
@@ -33,7 +33,7 @@ RSpec.describe RDF::KV do
 
     it 'should add simple statements to the delete side' do
       this = described_class.new subject: suri,
-        namespaces: { dct: RDF::Vocab::DC }
+        prefixes: { dct: RDF::Vocab::DC }
 
       patch = this.process({ '- dct:title' => 'Hi!' })
       expect(patch.deletes).to include(lstmt)
@@ -41,7 +41,7 @@ RSpec.describe RDF::KV do
 
     it 'should add wildcard statements to the delete side' do
       this = described_class.new subject: suri,
-        namespaces: { dct: RDF::Vocab::DC }
+        prefixes: { dct: RDF::Vocab::DC }
 
       patch = this.process({ '- dct:title' => '' })
       expect(patch.deletes).to include(pstmt)
@@ -62,12 +62,12 @@ RSpec.describe RDF::KV do
 
       expect(default.graph).to eq(lol)
       expect(default.subject).to eq(uu)
-      expect(default.namespaces[:foo].to_s).to eq(ns.to_s)
+      expect(default.prefixes[:foo].to_s).to eq(ns.to_s)
     end
 
     it 'can set macros' do
       # add the namespace to the instance
-      default.namespaces[:dct] = RDF::Vocab::DC
+      default.prefixes[:dct] = RDF::Vocab::DC
 
       patch = default.process({ '$ lol' => 'Hi!', 'dct:title $' => '$lol' })
 
@@ -75,7 +75,7 @@ RSpec.describe RDF::KV do
     end
 
     it 'can generate values' do
-      default.namespaces[:dct] = RDF::Vocab::DC
+      default.prefixes[:dct] = RDF::Vocab::DC
       patch = default.process({ 'dct:audience : $' => '$NEW_UUID_URN' })
 
       expect(patch.inserts.first.object).to be_a(RDF::URI)
@@ -83,7 +83,7 @@ RSpec.describe RDF::KV do
 
     it 'can set macros to multiple values' do
       # add the namespace to the instance
-      default.namespaces[:dct] = RDF::Vocab::DC
+      default.prefixes[:dct] = RDF::Vocab::DC
 
       patch = default.process({
         '$ lol' => ['Hi!', 'lolwut'],
