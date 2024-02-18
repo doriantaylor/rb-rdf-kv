@@ -29,16 +29,16 @@ RDF::Changeset.
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ['lib']
 
-  spec.required_ruby_version = Gem::Requirement.new('>= 2.3.0')
+  spec.required_ruby_version = Gem::Requirement.new('>= 2.7')
   # dev/test dependencies
   spec.add_development_dependency 'bundler',   '~> 2'
-  spec.add_development_dependency 'rdf-vocab', '~> 3.1'
+  spec.add_development_dependency 'rdf-vocab', '~> 3'
 
   # stuff we use
-  spec.add_runtime_dependency 'rdf',       '>= 3.1.1' # include my changes
+  spec.add_runtime_dependency 'rdf',       '~> 3' # include my changes
   spec.add_runtime_dependency 'uuidtools', '~> 2'
 
   # stuff i wrote
-  spec.add_runtime_dependency 'uuid-ncname', '>= 0.2.5'
+  spec.add_runtime_dependency 'uuid-ncname', '>= 0.4'
 
 end
