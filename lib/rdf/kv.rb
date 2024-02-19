@@ -389,7 +389,10 @@ class RDF::KV
           o = contents[:term2] || subject
         else
           s, p = (contents[:term2] ? contents.values_at(:term1, :term2) :
-                  [subject, contents[:term1]]).map { |t| resolve_term t }
+                  [subject, contents[:term1]]).map do |t|
+              t = resolve_term t
+              callback ? callback.call(t) : t
+          end
         end
 
         # the operation depends on whether the `-` modifier is present

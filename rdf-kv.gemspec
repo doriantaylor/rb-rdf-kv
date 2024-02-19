@@ -32,6 +32,8 @@ RDF::Changeset.
   spec.required_ruby_version = Gem::Requirement.new('>= 2.7')
   # dev/test dependencies
   spec.add_development_dependency 'bundler',   '~> 2'
+  spec.add_development_dependency 'rake',      '~> 13'
+  spec.add_development_dependency 'rspec',     '~> 3'
   spec.add_development_dependency 'rdf-vocab', '~> 3'
 
   # stuff we use
