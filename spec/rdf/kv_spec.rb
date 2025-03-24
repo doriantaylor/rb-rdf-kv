@@ -93,5 +93,13 @@ RSpec.describe RDF::KV do
       expect(patch.inserts).to include(lolwut)
     end
 
+    it 'generates time stamps' do
+      patch = default.process({
+        'dct:created ^xsd:dateTime $' => '$NEW_TIME_UTC'
+      })
+      expect(patch.inserts.first.object).to be_a(RDF::Literal)
+      expect(patch.inserts.first.object.object).to be_a(DateTime)
+    end
+
   end
 end

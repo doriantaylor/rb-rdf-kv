@@ -38,7 +38,7 @@ RDF::Changeset.
 
   # stuff we use
   spec.add_runtime_dependency 'rdf',       '~> 3' # include my changes
-  spec.add_runtime_dependency 'uuidtools', '~> 2'
+  spec.add_runtime_dependency 'uuidtools', '~> 3'
 
   # stuff i wrote
   spec.add_runtime_dependency 'uuid-ncname', '>= 0.4'

@@ -1,6 +1,7 @@
 require 'rdf/kv/version'
 
 require 'rdf'
+require 'time'
 require 'uri'
 require 'uuidtools'
 require 'uuid-ncname'
@@ -52,15 +53,9 @@ class RDF::KV
     },
   }.freeze
 
-  # macros are initially represented as a pair: the macro value and a
-  # flag denoting whether or not the macro itself contains macros and to
-  # try to dereference it.
-  GENERATED = {
-    NEW_UUID:     [[-> { UUIDTools::UUID.random_create.to_s   }, false]],
-    NEW_UUID_URN: [[-> { UUIDTools::UUID.random_create.to_uri }, false]],
-    NEW_BNODE:    [[-> { "_:#{UUID::NCName.to_ncname_64(
-          UUIDTools::UUID.random_create.to_s, version: 1) }" }, false]],
-  }.freeze
+  def random_uuid_ncname
+    UUID::NCName.to_ncname_64 UUIDTools::UUID.random_create.to_s, version: 1
+  end
 
   # just the classics
   DEFAULT_NS = {
@@ -68,6 +63,16 @@ class RDF::KV
     rdfs: RDF::RDFS,
     owl:  RDF::OWL,
     xsd:  RDF::XSD,
+  }.freeze
+
+  # macros are initially represented as a pair: the macro value and a
+  # flag denoting whether or not the macro itself contains macros and to
+  # try to dereference it.
+  GENERATED = {
+    NEW_UUID:     [[-> { UUIDTools::UUID.random_create.to_s   }, false]],
+    NEW_UUID_URN: [[-> { UUIDTools::UUID.random_create.to_uri }, false]],
+    NEW_BNODE:    [[-> { "_:#{random_uuid_ncname}" }, false]],
+    NEW_TIME_UTC: [[-> { Time.now.utc.iso8601 }, false]],
   }.freeze
 
   # Given a (massaged) set of macros, dereference the given array of
@@ -267,7 +272,7 @@ class RDF::KV
       graph.nil? or graph.is_a? RDF::Resource
     raise ArgumentError, 'prefixes must be hashable' unless
       prefixes.respond_to? :to_h
-    rase ArgumentError, 'callback must be callable' unless
+    raise ArgumentError, 'callback must be callable' unless
       callback.nil? or callback.respond_to? :call
 
     @subject  = subject
@@ -402,9 +407,13 @@ class RDF::KV
         # string then we're deleting a wildcard, same if we `=` overwrite
         if !reverse and op == :delete && values.include?('') ||
             contents[:modifier][?=]
+
+          # create a random variable name so we don't pass in a nil
+          var = RDF::Query::Variable.new random_uuid_ncname
+
           # i can't remember why we don't do this in reverse, probably
           # because it is too easy to shoot yourself in the foot
-          patch.delete RDF::Statement(s, p, nil, graph_name: g)
+          patch.delete RDF::Statement(s, p, var, graph_name: g)
 
           # nuke these since it will be pointless to evaluate further
           values.clear if op == :delete
