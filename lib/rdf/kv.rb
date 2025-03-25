@@ -143,6 +143,8 @@ class RDF::KV
       k = queue.shift
       seen[k] = true
 
+      # warn "key: #{k}"
+
       vals = macros[k]
 
       # done and pending macros within the macros
@@ -154,18 +156,21 @@ class RDF::KV
 
         next unless deref
 
+        # warn "pair: #{pair}"
+
+        # see a few lines below where deref is replaced
         if deref.is_a? Array
           deref.each { |m| done[m] ? dm[m] = true : pm[m] = true }
         else
           m = {}
-          val.scan(/#{MACRO}/o).compact.each do |x|
+          val.scan(/#{MACRO}/o).flatten.compact.each do |x|
             x = x.to_sym
             next unless macros[x]
             raise "Self-reference found: #{x}" if x == k
 
             m[x] = true
 
-            done[m] ? dm[m] = true : pm[m] = true
+            done[x] ? dm[x] = true : pm[x] = true
           end
 
           # replace the deref flag with the elements to deref with
@@ -183,13 +188,16 @@ class RDF::KV
 
         # put the current key back on the queue but put the dependencies first
         queue = q + [k] + queue
+        warn "queue: #{queue}"
         next
       end
 
-      unless dm.empty?
-        done[k] = deref_content vals, done
-      else
+      # warn vals.inspect
+
+      if dm.empty?
         done[k] = vals.map(&:first)
+      else
+        done[k] = deref_content vals.map(&:first), done
       end
 
       # remember to remove this guy or we'll loop forever
@@ -201,6 +209,8 @@ class RDF::KV
 
     done
   end
+
+  # XXX THIS FUNCTION SUCKS
 
   # unconditionally return a uri or bnode
   def resolve_term term
@@ -235,7 +245,7 @@ class RDF::KV
     elsif hint == ?@
       term = RDF::Literal(token, language: langdt.to_s.to_sym)
     elsif hint == ?^
-      raise 'datatype must be an RDF::Resource' unless
+      raise ArgumentError, 'datatype must be an RDF::Resource' unless
         langdt.is_a? RDF::Resource
       term = RDF::Literal(token, datatype: langdt)
     elsif hint == ?'
@@ -325,9 +335,9 @@ class RDF::KV
     # step 2: dereference all the macros (that asked to be dereferenced)
     begin
       macros = massage_macros macros
-    rescue e
+    rescue Exception => e
       # XXX we should do something more here
-      raise e
+      raise Error.new e
     end
 
     # step 3: apply special control macros (which modify self)
@@ -374,7 +384,9 @@ class RDF::KV
         end
 
         %i[term1 term2 graph].filter { |t| contents[t] }.each do |which|
-          contents[which] = resolve_term contents[which]
+          tmp = resolve_term contents[which]
+          tmp = callback.call(tmp) if callback
+          contents[which] = tmp
         end
 
         # these are the values we actually use; ensure they are duplicated
@@ -395,6 +407,7 @@ class RDF::KV
         else
           s, p = (contents[:term2] ? contents.values_at(:term1, :term2) :
                   [subject, contents[:term1]]).map do |t|
+              # XXX DO WE NEED THIS ANYMORE??
               t = resolve_term t
               callback ? callback.call(t) : t
           end
